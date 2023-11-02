@@ -54,6 +54,7 @@ services:
       - 127.0.0.1:7777:7777
     depends_on:
       - db
+      - postfix
     restart: unless-stopped
     networks:
       sl_network:
@@ -72,6 +73,7 @@ services:
       - 127.0.0.1:20381:20381
     depends_on:
       - db
+      - postfix
     restart: unless-stopped
     networks:
       sl_network:
@@ -82,6 +84,7 @@ services:
     command: ["python", "job_runner.py"]
     depends_on:
       - db
+      - postfix
     volumes:
       - "{{ ansible_facts.sl_workdir }}:/sl"
       - "{{ ansible_facts.sl_workdir }}/upload:/code/static/upload"
