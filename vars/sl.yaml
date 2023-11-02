@@ -46,4 +46,4 @@ sl:
   LOCAL_FILE_UPLOAD: 1
 
   # IP of the host running the postfix instance
-  POSTFIX_SERVER: 10.0.0.1
+  POSTFIX_SERVER: sl_postfix

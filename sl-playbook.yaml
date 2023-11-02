@@ -95,7 +95,7 @@
 
     - name: Include simple login variables
       ansible.builtin.include_vars:
-        file: host_vars/sl.yaml
+        file: vars/sl.yaml
 
     - name: Set sl (working) directory as a fact
       ansible.builtin.set_fact:
