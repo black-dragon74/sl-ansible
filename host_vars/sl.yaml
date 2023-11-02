@@ -1,0 +1,49 @@
+sl:
+  # ENV file name for sl app
+  ENV_FILE: simplelogin.env
+
+  # Version tag
+  SL_VERSION_TAG: 3.4.0
+
+  # Workdir, will be created in home directory of `ansible_user`
+  APP_DIR: sl_staging
+
+  # URL of the webapp, use https if using SSL
+  URL: http://x.nicksuniversum.com
+
+  # The domain that is used to create aliases
+  EMAIL_DOMAIN: x.nicksuniversum.com
+
+  # Postgres DB settings
+  DB_USER: nick
+  DB_PASS: ExDb20Tra
+  DB_NAME: simplelogin
+  DB_HOST: sl_db
+  DB_PORT: 5432
+
+  # Transactional email address
+  SUPPORT_EMAIL: support@x.nicksuniversum.com
+
+  # Custom domain needs to have this DNS MX record -- TTL, hostname
+  EMAIL_SERVERS_WITH_PRIORITY: "[(10, 'x.nicksuniversum.com.')]"
+
+  # Don't append a random word after aliases
+  DISABLE_ALIAS_SUFFIX: 1
+
+  # Private key used to compute DKIM sig
+  DKIM_PRIVATE_KEY_PATH: /dkim.key
+
+  # psql URL to connect to DB
+  # FIXME: Constructing it in inventory for now, use DB_URI instead of sl.DB_URI
+  # DB_URI: "postgresql://{{ sl.DB_USER }}:{{ sl.DB_PASS }}@{{ sl.DB_HOST }}:{{ sl.DB_PORT }}/{{ sl.DB_NAME }}"
+
+  # Just a random string used to secure flask app
+  FLASK_SECRET: bcf23a-35e6-4881-a742-bb263476b8b3
+
+  # Used when signing outgoing mails with PGP
+  GNUPGHOME: /sl/pgp
+
+  LOCAL_FILE_UPLOAD: 1
+
+  # IP of the host running the postfix instance
+  POSTFIX_SERVER: 10.0.0.1

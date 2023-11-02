@@ -1,0 +1,10 @@
+virtualmachines:
+  hosts:
+    master:
+      ansible_host: master
+    # pluto:
+    #   ansible_host: 116.203.93.43
+  vars:
+    ansible_user: nick
+    # ansible_user: root
+    DB_URI: "postgresql://{{ lookup('vars', 'sl').DB_USER }}:{{ lookup('vars', 'sl').DB_PASS }}@{{ lookup('vars', 'sl').DB_HOST }}:{{ lookup('vars', 'sl').DB_PORT }}/{{ lookup('vars', 'sl').DB_NAME }}"

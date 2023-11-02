@@ -1,0 +1,102 @@
+version: "3"
+services:
+  db:
+    container_name: sl_db
+    image: postgres:12.1
+    volumes:
+      - "{{ ansible_facts.sl_workdir }}/db:/var/lib/postgresql/data"
+    ports:
+      - 127.0.0.1:5432:5432
+    restart: unless-stopped
+    networks:
+      sl_network:
+
+  postfix:
+    container_name: sl_postfix
+    image: simplelogin/postfix
+    depends_on:
+      - db
+    environment:
+      ALIASES_DEFAULT_DOMAIN: "{{ sl.EMAIL_DOMAIN }}"
+      DB_HOST: "{{ sl.DB_HOST }}"
+      DB_USER: "{{ sl.DB_USER }}"
+      DB_PASSWORD: "{{ sl.DB_PASS }}"
+      DB_NAME: "{{ sl.DB_NAME }}"
+      EMAIL_HANDLER_HOST: "sl_mailhandler"
+      LETSENCRYPT_EMAIL: "{{ sl.SUPPORT_EMAIL }}"
+      POSTFIX_FQDN: "{{ sl.EMAIL_DOMAIN }}"
+      TLS_KEY_FILE: "/certs/privkey.pem"
+      TLS_CERT_FILE: "/certs/fullchain.pem"
+    volumes:
+      # Replace x.nicksuniversum.com with the value of POSTFIX_FQDN
+      # Abs path is a pain but needed as lets encrypt uses soft links
+      # Using abs path follows the symlink and bind mounts the actual file
+      # TODO: Think of a better approach
+      - "/etc/letsencrypt/live/{{ sl.EMAIL_DOMAIN }}/privkey.pem:/certs/privkey.pem:ro"
+      - "/etc/letsencrypt/live/{{ sl.EMAIL_DOMAIN }}/fullchain.pem:/certs/fullchain.pem:ro"
+    ports:
+      - 25:25
+      - 465:465
+    restart: unless-stopped
+    networks:
+      sl_network:
+
+  webapp:
+    container_name: sl_wapp
+    image: simplelogin/app:3.4.0
+    volumes:
+      - "{{ ansible_facts.sl_workdir }}:/sl"
+      - "{{ ansible_facts.sl_workdir }}/upload:/code/static/upload"
+      - "{{ ansible_facts.sl_workdir }}/DKIM.key:/dkim.key"
+      - "{{ ansible_facts.sl_workdir }}/DKIM_PUB.key:/dkim.pub.key"
+      - "{{ ansible_facts.sl_workdir }}/{{ sl.ENV_FILE }}:/code/.env"
+    ports:
+      - 127.0.0.1:7777:7777
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      sl_network:
+
+  mailhandler:
+    container_name: sl_mailhandler
+    image: simplelogin/app:3.4.0
+    command: ["python", "email_handler.py"]
+    volumes:
+      - "{{ ansible_facts.sl_workdir }}:/sl"
+      - "{{ ansible_facts.sl_workdir }}/upload:/code/static/upload"
+      - "{{ ansible_facts.sl_workdir }}/DKIM.key:/dkim.key"
+      - "{{ ansible_facts.sl_workdir }}/DKIM_PUB.key:/dkim.pub.key"
+      - "{{ ansible_facts.sl_workdir }}/{{ sl.ENV_FILE }}:/code/.env"
+    ports:
+      - 127.0.0.1:20381:20381
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      sl_network:
+
+  jobrunner:
+    container_name: sl_jobrunner
+    image: simplelogin/app:3.4.0
+    command: ["python", "job_runner.py"]
+    depends_on:
+      - db
+    volumes:
+      - "{{ ansible_facts.sl_workdir }}:/sl"
+      - "{{ ansible_facts.sl_workdir }}/upload:/code/static/upload"
+      - "{{ ansible_facts.sl_workdir }}/DKIM.key:/dkim.key"
+      - "{{ ansible_facts.sl_workdir }}/DKIM_PUB.key:/dkim.pub.key"
+      - "{{ ansible_facts.sl_workdir }}/{{ sl.ENV_FILE }}:/code/.env"
+    restart: unless-stopped
+    networks:
+      sl_network:
+
+networks:
+  sl_network:
+    name: sl_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+          gateway: 10.0.0.1

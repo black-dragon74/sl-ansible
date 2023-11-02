@@ -1,0 +1,260 @@
+- name: "Install Docker on the host machine (Debian)"
+  hosts: virtualmachines
+  gather_facts: true
+  vars:
+    deb_arch: { "aarch64": "arm64", "x86_64": "amd64" }
+  tasks:
+    #
+    # Prepare
+    #
+    - name: Update package cache
+      ansible.builtin.apt:
+        update_cache: true
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages by Docker
+      ansible.builtin.apt:
+        package:
+          - ca-certificates
+          - curl
+          - gnupg
+          - python3-pip
+        state: present
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install python module for Docker`
+      ansible.builtin.pip:
+        name:
+          - pyopenssl
+          - docker-compose
+        state: present
+
+    - name: Add docker APT repo key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker APT repo
+      ansible.builtin.apt_repository:
+        repo: "deb [arch={{ deb_arch[ansible_architecture] }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Update package cache again for Docker
+      ansible.builtin.apt:
+        update_cache: true
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker
+      ansible.builtin.apt:
+        package:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Add current user to docker group
+      ansible.builtin.user:
+        user: "{{ ansible_user }}"
+        append: true
+        groups:
+          - docker
+      become: true
+
+    - name: Refresh ssh connection for new group to take effect
+      ansible.builtin.meta: reset_connection
+
+    - name: Get members of the docker group
+      ansible.builtin.getent:
+        database: group
+        key: docker
+
+    - name: "Check that user is part of docker group"
+      ansible.builtin.assert:
+        that:
+          - "'{{ ansible_user }}' in ansible_facts.getent_group.docker"
+        fail_msg: "{{ ansible_user }} is not in docker group"
+      when: ansible_facts.getent_group.docker | length > 0
+
+    - name: Start and enable Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+      become: true
+
+    - name: Include simple login variables
+      ansible.builtin.include_vars:
+        file: host_vars/sl.yaml
+
+    - name: Set sl (working) directory as a fact
+      ansible.builtin.set_fact:
+        sl_workdir: "{{ ansible_env.HOME }}/{{ sl.APP_DIR }}"
+        cacheable: true
+
+    - name: Create directory for Simple Login Data
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        recurse: true
+      loop:
+        - "{{ ansible_facts.sl_workdir }}"
+        - "{{ ansible_facts.sl_workdir }}/db"
+        - "{{ ansible_facts.sl_workdir }}/pgp"
+        - "{{ ansible_facts.sl_workdir }}/upload"
+
+    - name: Generate PRIVATE key for DKIM
+      community.crypto.openssl_privatekey:
+        size: 1024
+        type: RSA
+        path: "{{ ansible_facts.sl_workdir }}/DKIM.key"
+        state: present
+
+    - name: Generate PUBLIC key for DKIM
+      community.crypto.openssl_publickey:
+        path: "{{ ansible_facts.sl_workdir }}/DKIM_PUB.key"
+        privatekey_path: "{{ ansible_facts.sl_workdir }}/DKIM.key"
+        state: present
+
+    - name: Generate ENV file for simplelogin to use
+      ansible.builtin.copy:
+        dest: "{{ ansible_facts.sl_workdir }}/{{ sl.ENV_FILE }}"
+        mode: "0644"
+        content: |
+          URL={{ sl.URL }}
+          EMAIL_DOMAIN={{ sl.EMAIL_DOMAIN }}
+          SUPPORT_EMAIL={{ sl.SUPPORT_EMAIL }}
+          EMAIL_SERVERS_WITH_PRIORITY={{ sl.EMAIL_SERVERS_WITH_PRIORITY }}
+          DISABLE_ALIAS_SUFFIX={{ sl.DISABLE_ALIAS_SUFFIX }}
+          DKIM_PRIVATE_KEY_PATH={{ sl.DKIM_PRIVATE_KEY_PATH }}
+          DB_URI={{ DB_URI }}
+          FLASK_SECRET={{ sl.FLASK_SECRET }}
+          GNUPGHOME={{ sl.GNUPGHOME }}
+          LOCAL_FILE_UPLOAD={{ sl.LOCAL_FILE_UPLOAD }}
+          POSTFIX_SERVER={{ sl.POSTFIX_SERVER }}
+
+    #
+    # Init
+    #
+    - name: Create a temp network for init containers
+      community.docker.docker_network:
+        name: sl_init_netw
+        state: present
+
+    - name: Deploy temporary postgres sql container
+      community.docker.docker_container:
+        name: sl_db
+        image: postgres:12.1
+        env:
+          POSTGRES_DB: "{{ sl.DB_NAME }}"
+          POSTGRES_USER: "{{ sl.DB_USER }}"
+          POSTGRES_PASSWORD: "{{ sl.DB_PASS }}"
+        volumes:
+          - "{{ ansible_facts.sl_workdir }}/db:/var/lib/postgresql/data"
+        networks:
+          - name: sl_init_netw
+        auto_remove: true
+        state: started
+
+    - name: Sleep for 10 seconds to ensure psql server availability
+      ansible.builtin.wait_for:
+        timeout: 10
+
+    - name: Run DB migrations
+      community.docker.docker_container:
+        name: sl_migration
+        image: "simplelogin/app:{{ sl.SL_VERSION_TAG }}"
+        command: "flask db upgrade"
+        volumes:
+          - "{{ ansible_facts.sl_workdir }}:/sl"
+          - "{{ ansible_facts.sl_workdir }}/upload:/code/static/upload"
+          - "{{ ansible_facts.sl_workdir }}/DKIM.key:/dkim.key"
+          - "{{ ansible_facts.sl_workdir }}/DKIM_PUB.key:/dkim.pub.key"
+          - "{{ ansible_facts.sl_workdir }}/{{ sl.ENV_FILE }}:/code/.env"
+        networks:
+          - name: sl_init_netw
+        auto_remove: true
+        state: started
+
+    - name: Run App Init
+      community.docker.docker_container:
+        name: sl_appinit
+        image: "simplelogin/app:{{ sl.SL_VERSION_TAG }}"
+        command: "python init_app.py"
+        volumes:
+          - "{{ ansible_facts.sl_workdir }}:/sl"
+          - "{{ ansible_facts.sl_workdir }}/DKIM.key:/dkim.key"
+          - "{{ ansible_facts.sl_workdir }}/DKIM_PUB.key:/dkim.pub.key"
+          - "{{ ansible_facts.sl_workdir }}/{{ sl.ENV_FILE }}:/code/.env"
+        networks:
+          - name: sl_init_netw
+        auto_remove: true
+        state: started
+
+    - name: Remove the temp psql container
+      community.docker.docker_container:
+        name: sl_db
+        state: absent
+
+    - name: Remove the temp init network
+      community.docker.docker_network:
+        name: sl_init_netw
+        state: absent
+        force: true
+
+    #
+    # Deployyyyyyyy!
+    #
+    - name: Render docker compose template
+      ansible.builtin.template:
+        src: templates/docker-compose.j2
+        dest: "{{ ansible_env.HOME }}/docker-compose.yaml"
+        mode: "0644"
+
+    - name: Tear down existing services
+      community.docker.docker_compose:
+        project_src: "{{ ansible_env.HOME }}"
+        state: absent
+
+    - name: Deploy the compose file
+      community.docker.docker_compose:
+        project_src: "{{ ansible_env.HOME }}"
+        state: present
+      register: compose_output
+
+    - name: Verify that the services are up and running
+      ansible.builtin.assert:
+        that:
+          - "compose_output.services.db.sl_db.state.running"
+          - "compose_output.services.postfix.sl_postfix.state.running"
+          - "compose_output.services.webapp.sl_wapp.state.running"
+          - "compose_output.services.mailhandler.sl_mailhandler.state.running"
+          - "compose_output.services.jobrunner.sl_jobrunner.state.running"
+
+    - name: Read PUBLIC key for DKIM TXT record
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        sed 's/-----BEGIN PUBLIC KEY-----/v=DKIM1; k=rsa; p=/g' {{ ansible_facts.sl_workdir }}/DKIM_PUB.key
+        | sed 's/-----END PUBLIC KEY-----//g' |tr -d '\n' | awk 1
+      args:
+        executable: bash
+      register: pkey
+      changed_when: pkey.rc != 0
+
+    - name: Print PUBLIC key for DNS TXT record
+      ansible.builtin.debug:
+        msg: "Make sure you update your DKIM TXT record with: {{ pkey.stdout }}"
+
+    - name: All done! Enjoy!
+      ansible.builtin.debug:
+        msg: "All done! Enjoy!"
