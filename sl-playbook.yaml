@@ -8,21 +8,20 @@
     # Prepare
     #
     - name: Update package cache
-      ansible.builtin.apt:
+      ansible.builtin.package:
         update_cache: true
       become: true
-      when: ansible_os_family == "Debian"
 
     - name: Install required packages by Docker
-      ansible.builtin.apt:
+      ansible.builtin.package:
         package:
-          - ca-certificates
-          - curl
-          - gnupg
           - python3-pip
         state: present
       become: true
-      when: ansible_os_family == "Debian"
+
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: auto
 
     - name: Install python module for Docker`
       ansible.builtin.pip:
@@ -31,37 +30,21 @@
           - docker-compose
         state: present
 
-    - name: Add docker APT repo key
-      ansible.builtin.apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
+    - name: Get docker install script
+      ansible.builtin.get_url:
+        url: https://get.docker.com
+        dest: /tmp/install-docker.sh
+        mode: "0755"
       become: true
-      when: ansible_os_family == "Debian"
+      when: "'docker-ce' not in ansible_facts.packages"
 
-    - name: Add Docker APT repo
-      ansible.builtin.apt_repository:
-        repo: "deb [arch={{ deb_arch[ansible_architecture] }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
+    - name: Run docker install script
+      ansible.builtin.command:
+        cmd: sh /tmp/install-docker.sh
       become: true
-      when: ansible_os_family == "Debian"
-
-    - name: Update package cache again for Docker
-      ansible.builtin.apt:
-        update_cache: true
-      become: true
-      when: ansible_os_family == "Debian"
-
-    - name: Install Docker
-      ansible.builtin.apt:
-        package:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
-      become: true
-      when: ansible_os_family == "Debian"
+      register: docker_script_result
+      changed_when: docker_script_result.rc == 0
+      when: "'docker-ce' not in ansible_facts.packages"
 
     - name: Add current user to docker group
       ansible.builtin.user:
