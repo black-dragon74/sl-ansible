@@ -34,6 +34,9 @@ services:
       # TODO: Think of a better approach
       - "/etc/letsencrypt/live/{{ sl.EMAIL_DOMAIN }}/privkey.pem:/certs/privkey.pem:ro"
       - "/etc/letsencrypt/live/{{ sl.EMAIL_DOMAIN }}/fullchain.pem:/certs/fullchain.pem:ro"
+    ports:
+      - 0.0.0.0:25:25
+      - 0.0.0.0:465:465
     restart: unless-stopped
     networks:
       sl_network:
