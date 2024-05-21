@@ -13,7 +13,7 @@ services:
 
   postfix:
     container_name: sl_postfix
-    image: simplelogin/postfix
+    image: blackdragon74/sl-postfix
     depends_on:
       - db
     environment:
@@ -43,7 +43,7 @@ services:
 
   webapp:
     container_name: sl_wapp
-    image: simplelogin/app:3.4.0
+    image: blackdragon74/simplelogin
     volumes:
       - "{{ ansible_facts.sl_workdir }}:/sl"
       - "{{ ansible_facts.sl_workdir }}/upload:/code/static/upload"
@@ -61,7 +61,7 @@ services:
 
   mailhandler:
     container_name: sl_mailhandler
-    image: simplelogin/app:3.4.0
+    image: blackdragon74/simplelogin
     command: ["python", "email_handler.py"]
     volumes:
       - "{{ ansible_facts.sl_workdir }}:/sl"
@@ -80,7 +80,7 @@ services:
 
   jobrunner:
     container_name: sl_jobrunner
-    image: simplelogin/app:3.4.0
+    image: blackdragon74/simplelogin
     command: ["python", "job_runner.py"]
     depends_on:
       - db

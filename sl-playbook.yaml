@@ -156,8 +156,8 @@
     - name: Run DB migrations
       community.docker.docker_container:
         name: sl_migration
-        image: "simplelogin/app:{{ sl.SL_VERSION_TAG }}"
-        command: "flask db upgrade"
+        image: "blackdragon74/simplelogin"
+        command: "alembic upgrade head"
         volumes:
           - "{{ ansible_facts.sl_workdir }}:/sl"
           - "{{ ansible_facts.sl_workdir }}/upload:/code/static/upload"
@@ -172,7 +172,7 @@
     - name: Run App Init
       community.docker.docker_container:
         name: sl_appinit
-        image: "simplelogin/app:{{ sl.SL_VERSION_TAG }}"
+        image: "blackdragon74/simplelogin"
         command: "python init_app.py"
         volumes:
           - "{{ ansible_facts.sl_workdir }}:/sl"

@@ -2,9 +2,6 @@ sl:
   # ENV file name for sl app
   ENV_FILE: simplelogin.env
 
-  # Version tag
-  SL_VERSION_TAG: 3.4.0
-
   # Workdir, will be created in home directory of `ansible_user`
   APP_DIR: sl_staging
 
