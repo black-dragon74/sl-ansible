@@ -232,7 +232,7 @@
     - name: Read PUBLIC key for DKIM TXT record
       ansible.builtin.shell: >-
         set -o pipefail &&
-        sed 's/-----BEGIN PUBLIC KEY-----/v=DKIM1; k=rsa; p=/g' {{ ansible_facts.sl_workdir }}/DKIM_PUB.key
+        sed 's/-----BEGIN PUBLIC KEY-----/v=DKIM1; k=ed25519; p=/g' {{ ansible_facts.sl_workdir }}/DKIM_PUB.key
         | sed 's/-----END PUBLIC KEY-----//g' |tr -d '\n' | awk 1
       args:
         executable: bash
