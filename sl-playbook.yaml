@@ -23,7 +23,7 @@
       ansible.builtin.package_facts:
         manager: auto
 
-    - name: Install python module for Docker`
+    - name: Install python module for Docker
       ansible.builtin.pip:
         name:
           - pyopenssl
@@ -96,10 +96,15 @@
         - "{{ ansible_facts.sl_workdir }}/pgp"
         - "{{ ansible_facts.sl_workdir }}/upload"
 
+    - name: Install cryto backend for Ed25519
+      ansible.builtin.pip:
+        name:
+          - cryptography
+        state: present
+
     - name: Generate PRIVATE key for DKIM
       community.crypto.openssl_privatekey:
-        size: 1024
-        type: RSA
+        type: Ed25519
         path: "{{ ansible_facts.sl_workdir }}/DKIM.key"
         state: present
 
