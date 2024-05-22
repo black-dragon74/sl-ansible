@@ -96,7 +96,7 @@
         - "{{ ansible_facts.sl_workdir }}/pgp"
         - "{{ ansible_facts.sl_workdir }}/upload"
 
-    - name: Install cryto backend for Ed25519
+    - name: Install crypto backend for Ed25519
       ansible.builtin.pip:
         name:
           - cryptography
