@@ -96,15 +96,10 @@
         - "{{ ansible_facts.sl_workdir }}/pgp"
         - "{{ ansible_facts.sl_workdir }}/upload"
 
-    - name: Install crypto backend for Ed25519
-      ansible.builtin.pip:
-        name:
-          - cryptography
-        state: present
-
     - name: Generate PRIVATE key for DKIM
       community.crypto.openssl_privatekey:
-        type: Ed25519
+        size: 2048
+        type: RSA
         path: "{{ ansible_facts.sl_workdir }}/DKIM.key"
         state: present
 
@@ -232,7 +227,7 @@
     - name: Read PUBLIC key for DKIM TXT record
       ansible.builtin.shell: >-
         set -o pipefail &&
-        sed 's/-----BEGIN PUBLIC KEY-----/v=DKIM1; k=ed25519; p=/g' {{ ansible_facts.sl_workdir }}/DKIM_PUB.key
+        sed 's/-----BEGIN PUBLIC KEY-----/v=DKIM1; k=rsa; p=/g' {{ ansible_facts.sl_workdir }}/DKIM_PUB.key
         | sed 's/-----END PUBLIC KEY-----//g' |tr -d '\n' | awk 1
       args:
         executable: bash
